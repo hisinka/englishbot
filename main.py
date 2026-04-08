@@ -4,27 +4,38 @@ from deep_translator import GoogleTranslator
 
 TOKEN = "8763198603:AAGfXly0jo29YlOgKvEiGesn36CgKCHd9-k"
 
+dictionary = {}
+
 
 async def start(update, context):
     keyboard = ReplyKeyboardMarkup([
         [KeyboardButton("ИЗУЧАТЬ СЛОВА")],
         [KeyboardButton("МОЙ СЛОВАРЬ")]
     ], resize_keyboard=True)
-    await update.message.reply_text("Выбери действие:", reply_markup=keyboard)
+    await update.message.reply_text("выбери действие:", reply_markup=keyboard)
 
 
 async def handle_message(update, context):
     text = update.message.text
+    user = update.effective_user.id
 
     if text == "ИЗУЧАТЬ СЛОВА":
-        await update.message.reply_text("Напишите слово:")
+        await update.message.reply_text("напишите слово:")
         context.user_data['mode'] = 'translate'
 
     elif text == "МОЙ СЛОВАРЬ":
-        await update.message.reply_text("Словарь пока пустой")
+        if user in dictionary and dictionary[user]:
+            result = ""
+            for rus, eng in dictionary[user].items():
+                result += f"{rus} - {eng}\n"
+            await update.message.reply_text(result)
+        else:
+            await update.message.reply_text("Словарь пуст")
 
     elif context.user_data.get('mode') == 'translate':
         translation = GoogleTranslator(source='ru', target='en').translate(text)
+        context.user_data['last_word'] = text
+        context.user_data['last_trans'] = translation
 
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("Добавить в словарь", callback_data="add")]
@@ -39,7 +50,17 @@ async def handle_message(update, context):
 async def button(update, context):
     query = update.callback_query
     await query.answer()
-    await query.edit_message_text("Кнопка не работает")
+
+    user = query.from_user.id
+    word = context.user_data.get('last_word')
+    trans = context.user_data.get('last_trans')
+
+    if user not in dictionary:
+        dictionary[user] = {}
+
+    dictionary[user][word] = trans
+
+    await query.edit_message_text(f"{word} добавлено в словарь")
 
 
 app = Application.builder().token(TOKEN).build()
