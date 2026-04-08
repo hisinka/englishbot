@@ -31,7 +31,6 @@ async def handle_message(update, context):
         ])
 
         await update.message.reply_text(f"{text} - {translation}", reply_markup=keyboard)
-        context.user_data['mode'] = None
 
     else:
         await start(update, context)
