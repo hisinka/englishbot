@@ -312,3 +312,4 @@ app.add_handler(MessageHandler(filters.TEXT, handle_message))
 app.add_handler(CallbackQueryHandler(button))
 
 app.run_polling()
+#че то я криво все скоммитил извините
