@@ -2,14 +2,15 @@ from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboard
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
 from deep_translator import GoogleTranslator
 from database import SessionLocal
-from models import User, Word
+from models import User, Word, Statistics
 
-TOKEN = "8763198603:AAGfXly0jo29YlOgKvEiGesn36CgKCHd9-k"
+TOKEN = "8763198603:AAGJN96DYeSZ1pymUzq0mXQpf_1-JjSo1AQ"
 
 
 
 async def start(update, context):
     keyboard = ReplyKeyboardMarkup([
+        [KeyboardButton("ПЕРЕВЕСТИ СЛОВО")],
         [KeyboardButton("ИЗУЧАТЬ СЛОВА")],
         [KeyboardButton("МОЙ СЛОВАРЬ")]
     ], resize_keyboard=True)
@@ -20,9 +21,39 @@ async def handle_message(update, context):
     text = update.message.text
     user = update.effective_user.id
 
+    if text == "ПЕРЕВЕСТИ СЛОВО":
+        context.user_data["mode"] = "translate"
+
+        await update.message.reply_text(
+            "Напиши русское слово для перевода"
+        )
+        return
+
     if text == "ИЗУЧАТЬ СЛОВА":
-        await update.message.reply_text("напишите слово:")
-        context.user_data['mode'] = 'translate'
+        context.user_data['mode'] = 'learn'
+
+        db = SessionLocal()
+        user_obj = db.query(User).filter(User.telegram_id == user).first()
+
+        if not user_obj:
+            await update.message.reply_text("Словарь пуст")
+            db.close()
+            return
+
+        word = db.query(Word).filter(Word.user_id == user_obj.id).first()
+
+        db.close()
+
+        if not word:
+            await update.message.reply_text("Словарь пуст")
+            return
+
+        context.user_data['learn_word_id'] = word.id
+
+        await update.message.reply_text(
+            f"Переведи слово:\n\n{word.russian}"
+        )
+        return
 
 
     elif text == "МОЙ СЛОВАРЬ":
@@ -63,6 +94,7 @@ async def handle_message(update, context):
         db.close()
 
     elif context.user_data.get('mode') == 'translate':
+
         translation = GoogleTranslator(source='ru', target='en').translate(text)
         context.user_data['last_word'] = text
         context.user_data['last_trans'] = translation
@@ -73,10 +105,78 @@ async def handle_message(update, context):
 
         await update.message.reply_text(f"{text} - {translation}", reply_markup=keyboard)
 
+
+    elif context.user_data.get('mode') == 'learn':
+
+        word_id = context.user_data.get('learn_word_id')
+
+        db = SessionLocal()
+
+        word = db.query(Word).filter(
+
+            Word.id == word_id
+
+        ).first()
+
+        if not word:
+            db.close()
+
+            await update.message.reply_text("Ошибка")
+
+            return
+
+        user_obj = db.query(User).filter(
+
+            User.telegram_id == user
+
+        ).first()
+
+        stat = db.query(Statistics).filter(
+
+            Statistics.user_id == user_obj.id
+
+        ).first()
+
+        if not stat:
+            stat = Statistics(user_id=user_obj.id)
+
+            db.add(stat)
+
+            db.commit()
+
+        if text.lower().strip() == word.english.lower().strip():
+
+            stat.correct_answers += 1
+
+            await update.message.reply_text(
+
+                "✅ правильно!"
+
+            )
+
+
+        else:
+
+            stat.wrong_answers += 1
+
+            await update.message.reply_text(
+
+                f"❌ неправильно\nПравильный ответ: {word.english}"
+
+            )
+
+        db.commit()
+
+        db.close()
+
+        context.user_data['mode'] = None
+
+        return
+
+
     else:
+
         await start(update, context)
-
-
 async def button(update, context):
     query = update.callback_query
     await query.answer()
@@ -129,7 +229,8 @@ async def button(update, context):
         )
         db.add(new_word)
         db.commit()
-        db.close()
+
+    db.close()
 
     await query.edit_message_text(f"{word} добавлено в словарь")
 

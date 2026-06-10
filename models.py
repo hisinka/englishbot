@@ -16,3 +16,23 @@ class Word(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     russian = Column(String)
     english = Column(String)
+class Statistics(Base):
+    __tablename__ = "statistics"
+
+    id = Column(Integer, primary_key=True)
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        unique=True
+    )
+
+    correct_answers = Column(
+        Integer,
+        default=0
+    )
+
+    wrong_answers = Column(
+        Integer,
+        default=0
+    )
