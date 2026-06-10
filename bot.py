@@ -3,8 +3,11 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from deep_translator import GoogleTranslator
 from database import SessionLocal
 from models import User, Word, Statistics
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
-TOKEN = "8763198603:AAGJN96DYeSZ1pymUzq0mXQpf_1-JjSo1AQ"
+TOKEN = os.getenv("TOKEN")
 
 
 
@@ -12,7 +15,8 @@ async def start(update, context):
     keyboard = ReplyKeyboardMarkup([
         [KeyboardButton("ПЕРЕВЕСТИ СЛОВО")],
         [KeyboardButton("ИЗУЧАТЬ СЛОВА")],
-        [KeyboardButton("МОЙ СЛОВАРЬ")]
+        [KeyboardButton("МОЙ СЛОВАРЬ")],
+        [KeyboardButton("СТАТИСТИКА")]
     ], resize_keyboard=True)
     await update.message.reply_text("выбери действие:", reply_markup=keyboard)
 
@@ -27,6 +31,39 @@ async def handle_message(update, context):
         await update.message.reply_text(
             "Напиши русское слово для перевода"
         )
+        return
+    elif text == "СТАТИСТИКА":
+
+        db = SessionLocal()
+
+        user_obj = db.query(User).filter(
+            User.telegram_id == user
+        ).first()
+
+        if not user_obj:
+            await update.message.reply_text(
+                "Статистика отсутствует"
+            )
+            db.close()
+            return
+
+        stat = db.query(Statistics).filter(
+            Statistics.user_id == user_obj.id
+        ).first()
+
+        if not stat:
+            await update.message.reply_text(
+                "Статистика отсутствует"
+            )
+            db.close()
+            return
+
+        await update.message.reply_text(
+            f"✅ Правильных ответов: {stat.correct_answers}\n"
+            f"❌ Ошибок: {stat.wrong_answers}"
+        )
+
+        db.close()
         return
 
     if text == "ИЗУЧАТЬ СЛОВА":
@@ -177,6 +214,40 @@ async def handle_message(update, context):
     else:
 
         await start(update, context)
+async def stats(update, context):
+    user_id = update.effective_user.id
+
+    db = SessionLocal()
+
+    user = db.query(User).filter(
+        User.telegram_id == user_id
+    ).first()
+
+    if not user:
+        await update.message.reply_text(
+            "Статистика отсутствует"
+        )
+        db.close()
+        return
+
+    stat = db.query(Statistics).filter(
+        Statistics.user_id == user.id
+    ).first()
+
+    if not stat:
+        await update.message.reply_text(
+            "Статистика отсутствует"
+        )
+        db.close()
+        return
+
+    await update.message.reply_text(
+        f"✅ Правильных ответов: {stat.correct_answers}\n"
+        f"❌ Ошибок: {stat.wrong_answers}"
+    )
+
+    db.close()
+
 async def button(update, context):
     query = update.callback_query
     await query.answer()
@@ -236,6 +307,7 @@ async def button(update, context):
 
 app = Application.builder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("stats", stats))
 app.add_handler(MessageHandler(filters.TEXT, handle_message))
 app.add_handler(CallbackQueryHandler(button))
 
