@@ -46,12 +46,19 @@ async def handle_message(update, context):
 
         else:
 
-            result = ""
+            keyboard = []
 
             for w in words:
-                result += f"{w.russian} - {w.english}\n"
+                keyboard.append([
+                    InlineKeyboardButton(
+                        f"{w.russian} - {w.english} ❌",
+                        callback_data=f"delete_{w.id}"
+                    )
+                ])
 
-            await update.message.reply_text(result)
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            await update.message.reply_text("Твой словарь:", reply_markup=reply_markup)
 
         db.close()
 
@@ -73,6 +80,23 @@ async def handle_message(update, context):
 async def button(update, context):
     query = update.callback_query
     await query.answer()
+
+    data = query.data
+
+    if data.startswith("delete_"):
+        word_id = int(data.split("_")[1])
+
+        db = SessionLocal()
+        word = db.query(Word).filter(Word.id == word_id).first()
+
+        if word:
+            db.delete(word)
+            db.commit()
+
+        db.close()
+
+        await query.edit_message_text("Слово удалено")
+        return
 
     user_id = query.from_user.id
     word = context.user_data.get('last_word')
