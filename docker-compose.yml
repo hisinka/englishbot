@@ -1,11 +1,45 @@
-version: "3.9"
-
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: englishbot_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   bot:
     build: .
-    container_name: my-bot
+    container_name: englishbot
     restart: unless-stopped
-    env_file:
-      - .env
-    volumes:
-      - ./data.db:/app/data.db
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    command: python bot.py
+
+  backup:
+    build: .
+    container_name: englishbot_backup
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "while true; do
+        python backup.py || echo 'backup failed';
+        sleep 86400;
+      done"
+
+volumes:
+  pgdata:
